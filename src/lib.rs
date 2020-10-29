@@ -117,6 +117,7 @@ impl Component for Model {
         html! {
             <>
                 <h1><code>{"adblock-rust"}</code>{" Dashboard"}</h1>
+                <a href="https://github.com/brave-experiments/adblock-rust-dashboard"><p>{"View source on GitHub"}</p></a>
                 <div>
                     <h2>{"Parse a single filter"}</h2>
                     <input type="text" value=&self.filter oninput=self.link.callback(|e: InputData| Msg::UpdateFilter(e.value))/>
