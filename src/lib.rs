@@ -2,6 +2,7 @@
 
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
+use yew::services::{Task, TimeoutService};
 
 use adblock::lists::{parse_filter, ParsedFilter, FilterParseError};
 
@@ -12,6 +13,7 @@ struct Model {
     parse_result: Result<ParsedFilter, FilterParseError>,
 
     filter_list: String,
+    filter_list_update_task: Option<Box<dyn Task>>,
     engine: adblock::engine::Engine,
 
     network_url: String,
@@ -26,11 +28,14 @@ struct Model {
 enum Msg {
     UpdateFilter(String),
     UpdateFilterList(String),
+    FilterListTimeout,
     UpdateNetworkUrl(String),
     UpdateNetworkSourceUrl(String),
     UpdateNetworkRequestType(String),
     UpdateCosmeticUrl(String),
 }
+
+const FILTER_LIST_UPDATE_DEBOUNCE_MS: u64 = 1200;
 
 impl Component for Model {
     type Message = Msg;
@@ -43,6 +48,7 @@ impl Component for Model {
             parse_result: Err(FilterParseError::Empty),
 
             filter_list: "".into(),
+            filter_list_update_task: None,
             engine: adblock::engine::Engine::new(false),
 
             network_url: String::new(),
@@ -64,9 +70,24 @@ impl Component for Model {
             }
             Msg::UpdateFilterList(new_value) => {
                 self.filter_list = new_value;
+
+                // Cancel any previous timer
+                self.filter_list_update_task.take();
+
+                // Remove any existing block result
+                self.network_result.take();
+
+                // Start a new 3 second timeout
+                self.filter_list_update_task = Some(Box::new(TimeoutService::spawn(
+                    std::time::Duration::from_millis(FILTER_LIST_UPDATE_DEBOUNCE_MS),
+                    self.link.callback(|_| Msg::FilterListTimeout),
+                )));
+            }
+            Msg::FilterListTimeout => {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
                 filter_set.add_filter_list(&self.filter_list, adblock::lists::FilterFormat::Standard);
                 self.engine = adblock::engine::Engine::from_filter_set(filter_set, false);
+                self.check_network_urls();
             }
             Msg::UpdateNetworkUrl(new_value) => {
                 self.network_url = new_value;
