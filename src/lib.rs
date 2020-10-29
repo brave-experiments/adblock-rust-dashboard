@@ -181,5 +181,6 @@ impl Model {
 
 #[wasm_bindgen(start)]
 pub fn run_app() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     App::<Model>::new().mount_to_body();
 }

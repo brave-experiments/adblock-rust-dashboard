@@ -11,5 +11,6 @@ crate-type = ["cdylib", "rlib"]
 yew = "^ 0.17"
 wasm-bindgen = "^ 0.2"
 web-sys = "^ 0.3"
+console_error_panic_hook = "^ 0.1"
 
 adblock = "0.3.3"
