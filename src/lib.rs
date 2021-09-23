@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 use yew::services::{Task, TimeoutService};
 
-use adblock::lists::{parse_filter, ParsedFilter, FilterParseError};
+use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions};
 
 struct Model {
     link: ComponentLink<Self>,
@@ -65,7 +65,7 @@ impl Component for Model {
         match msg {
             Msg::UpdateFilter(new_value) => {
                 self.filter = new_value;
-                let result = parse_filter(&self.filter, true, adblock::lists::FilterFormat::Standard);
+                let result = parse_filter(&self.filter, true, ParseOptions { format: FilterFormat::Standard, include_redirect_urls: true });
                 self.parse_result = result;
             }
             Msg::UpdateFilterList(new_value) => {
@@ -85,7 +85,7 @@ impl Component for Model {
             }
             Msg::FilterListTimeout => {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
-                filter_set.add_filter_list(&self.filter_list, adblock::lists::FilterFormat::Standard);
+                filter_set.add_filter_list(&self.filter_list, ParseOptions::default());
                 self.engine = adblock::engine::Engine::from_filter_set(filter_set, false);
                 self.check_network_urls();
             }
