@@ -120,7 +120,7 @@ impl Component for Model {
                 <a href="https://github.com/brave-experiments/adblock-rust-dashboard"><p>{"View source on GitHub"}</p></a>
                 <div>
                     <h2>{"Parse a single filter"}</h2>
-                    <input type="text" value=&self.filter oninput=self.link.callback(|e: InputData| Msg::UpdateFilter(e.value))/>
+                    <input type="text" value=self.filter.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateFilter(e.value))/>
 
                     { match &self.parse_result {
                         Ok(ParsedFilter::Network(filter)) => Self::view_network_filter(filter),
@@ -134,14 +134,14 @@ impl Component for Model {
                 <div>
                     <h2>{"Test a list"}</h2>
                     <h3>{"List contents"}</h3>
-                    <textarea value=&self.filter_list oninput=self.link.callback(|e: InputData| Msg::UpdateFilterList(e.value))/>
+                    <textarea value=self.filter_list.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateFilterList(e.value))/>
                     <h3>{"Check a network request"}</h3>
                     <h4>{"Request URL"}</h4>
-                    <input type="text" value=&self.network_url oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkUrl(e.value))/>
+                    <input type="text" value=self.network_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkUrl(e.value))/>
                     <h4>{"Source URL"}</h4>
-                    <input type="text" value=&self.network_source_url oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkSourceUrl(e.value))/>
+                    <input type="text" value=self.network_source_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkSourceUrl(e.value))/>
                     <h4>{"Request type"}</h4>
-                    <input type="text" value=&self.network_request_type oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkRequestType(e.value))/>
+                    <input type="text" value=self.network_request_type.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkRequestType(e.value))/>
                     {
                         if let Some(blocker_result) = self.network_result.as_ref() {
                             if let Some(error) = blocker_result.error.as_ref() {
@@ -160,7 +160,7 @@ impl Component for Model {
                     }
                     <h3>{"Check cosmetic resources"}</h3>
                     <h4>{"Source URL"}</h4>
-                    <input type="text" value=&self.cosmetic_url oninput=self.link.callback(|e: InputData| Msg::UpdateCosmeticUrl(e.value))/>
+                    <input type="text" value=self.cosmetic_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateCosmeticUrl(e.value))/>
                     {
                         if let Some(cosmetic_result) = self.cosmetic_result.as_ref() {
                             html! {

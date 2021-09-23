@@ -8,7 +8,7 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-yew = "^ 0.17"
+yew = "^ 0.18"
 wasm-bindgen = "^ 0.2"
 web-sys = "^ 0.3"
 console_error_panic_hook = "^ 0.1"
