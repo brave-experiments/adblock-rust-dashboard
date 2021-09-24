@@ -6,6 +6,8 @@ use yew::services::{Task, TimeoutService};
 
 use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions};
 
+mod util;
+
 struct Model {
     link: ComponentLink<Self>,
 
@@ -23,6 +25,8 @@ struct Model {
 
     cosmetic_url: String,
     cosmetic_result: Option<adblock::cosmetic_filter_cache::UrlSpecificResources>,
+
+    download_legacy_format: bool,
 }
 
 enum Msg {
@@ -33,6 +37,8 @@ enum Msg {
     UpdateNetworkSourceUrl(String),
     UpdateNetworkRequestType(String),
     UpdateCosmeticUrl(String),
+    ToggleDownloadFormat,
+    DownloadDat,
 }
 
 const FILTER_LIST_UPDATE_DEBOUNCE_MS: u64 = 1200;
@@ -58,6 +64,8 @@ impl Component for Model {
 
             cosmetic_url: String::new(),
             cosmetic_result: None,
+
+            download_legacy_format: false,
         }
     }
 
@@ -104,6 +112,17 @@ impl Component for Model {
             Msg::UpdateCosmeticUrl(new_value) => {
                 self.cosmetic_url = new_value;
                 self.cosmetic_result = Some(self.engine.url_cosmetic_resources(&self.cosmetic_url));
+            }
+            Msg::ToggleDownloadFormat => {
+                self.download_legacy_format = !self.download_legacy_format;
+            }
+            Msg::DownloadDat => {
+                let data = if self.download_legacy_format {
+                    self.engine.serialize_compressed().unwrap()
+                } else {
+                    self.engine.serialize_raw().unwrap()
+                };
+                util::save_bin_file("rs-ABPFilterParserData.dat", &data[..]);
             }
         }
         true
@@ -173,6 +192,11 @@ impl Component for Model {
                             html! { <p></p> }
                         }
                     }
+                    <h3>{"Download the serialized DAT"}</h3>
+                    <input id="download_legacy_format" type="checkbox" checked=self.download_legacy_format onchange=self.link.callback(|_e: ChangeData| Msg::ToggleDownloadFormat)/>
+                    <label for="download_legacy_format">{"Download legacy (compressed) format"}</label>
+                    <br/>
+                    <button onclick=self.link.callback(|_e: MouseEvent| Msg::DownloadDat)>{"Download"}</button>
                 </div>
             </>
         }
