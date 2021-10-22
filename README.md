@@ -10,10 +10,11 @@ Test [`adblock-rust`](https://github.com/brave/adblock-rust) directly in the bro
 
 First, follow [these instructions](https://rustup.rs) to install the `cargo` commandline tool for Rust.
 
-Then, install `wasm-pack`:
+Then, install the `wasm32-unknown-unknown` target triple, as well as the `wasm-bindgen-cli` tool:
 
 ```
-cargo install wasm-pack
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli
 ```
 
 Make sure `$CARGO_HOME/bin` is added to your `$PATH`.
@@ -21,7 +22,8 @@ Make sure `$CARGO_HOME/bin` is added to your `$PATH`.
 ### Build
 
 ```
-wasm-pack build --target web --out-dir ./static
+cargo build --lib --release --target wasm32-unknown-unknown
+wasm-bindgen --target web --no-typescript --out-dir static target/wasm32-unknown-unknown/release/adblock_rust_dashboard.wasm
 ```
 
 Then, the dashboard can be served from the `static` folder, using a server implementation of your choice. For example, `python3 -m http.server`.

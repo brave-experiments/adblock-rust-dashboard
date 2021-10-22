@@ -1,1 +1,3 @@
 /target
+/static/adblock_rust_dashboard_bg.wasm
+/static/adblock_rust_dashboard.js
