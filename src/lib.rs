@@ -4,7 +4,7 @@ use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 use yew::services::{Task, TimeoutService};
 
-use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions};
+use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions, RuleTypes};
 
 mod util;
 
@@ -73,7 +73,7 @@ impl Component for Model {
         match msg {
             Msg::UpdateFilter(new_value) => {
                 self.filter = new_value;
-                let result = parse_filter(&self.filter, true, ParseOptions { format: FilterFormat::Standard, include_redirect_urls: true });
+                let result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard, include_redirect_urls: true });
                 self.parse_result = result;
             }
             Msg::UpdateFilterList(new_value) => {
