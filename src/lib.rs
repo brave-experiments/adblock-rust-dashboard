@@ -5,6 +5,7 @@ use yew::prelude::*;
 use yew::services::{Task, TimeoutService};
 
 use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions, RuleTypes};
+use adblock::content_blocking::{CbRuleEquivalent, CbRuleCreationFailure};
 
 mod util;
 
@@ -13,6 +14,7 @@ struct Model {
 
     filter: String,
     parse_result: Result<ParsedFilter, FilterParseError>,
+    cb_result: Option<Result<CbRuleEquivalent, CbRuleCreationFailure>>,
 
     filter_list: String,
     filter_list_update_task: Option<Box<dyn Task>>,
@@ -52,6 +54,7 @@ impl Component for Model {
 
             filter: "".into(),
             parse_result: Err(FilterParseError::Empty),
+            cb_result: None,
 
             filter_list: "".into(),
             filter_list_update_task: None,
@@ -73,8 +76,8 @@ impl Component for Model {
         match msg {
             Msg::UpdateFilter(new_value) => {
                 self.filter = new_value;
-                let result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard });
-                self.parse_result = result;
+                self.parse_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard });
+                self.cb_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard }).ok().map(|r| r.try_into());
             }
             Msg::UpdateFilterList(new_value) => {
                 self.filter_list = new_value;
@@ -149,6 +152,26 @@ impl Component for Model {
                         Err(FilterParseError::Unsupported) => html! { <p>{"Unsupported filter"}</p> },
                         Err(FilterParseError::Empty) => html! { <p></p> },
                     } }
+
+                    { if let Some(cb_result) = &self.cb_result {
+                        html! {
+                            <>
+                                <h4>{"Content blocking syntax equivalent "}<a href="https://developer.apple.com/documentation/safariservices/creating_a_content_blocker">{"?"}</a></h4>
+                                { match cb_result {
+                                    Ok(CbRuleEquivalent::SingleRule(rule)) => Self::view_cb_rule(rule),
+                                    Ok(CbRuleEquivalent::SplitDocument(rule1, rule2)) => html! {
+                                        <>
+                                            {Self::view_cb_rule(rule1)}
+                                            {Self::view_cb_rule(rule2)}
+                                        </>
+                                    },
+                                    Err(e) => html! { <p>{format!("Couldn't convert to content blocking syntax: {:?}", e)}</p> },
+                                } }
+                            </>
+                        }
+                    } else {
+                        html! { <></> }
+                    } }
                 </div>
                 <div>
                     <h2>{"Test a list"}</h2>
@@ -216,6 +239,13 @@ impl Model {
         html! {
             <>
                 <h4>{"Cosmetic Filter"}</h4>
+                <p>{ format!("{:?}", filter) }</p>
+            </>
+        }
+    }
+    fn view_cb_rule(filter: &adblock::content_blocking::CbRule) -> Html {
+        html! {
+            <>
                 <p>{ format!("{:?}", filter) }</p>
             </>
         }
