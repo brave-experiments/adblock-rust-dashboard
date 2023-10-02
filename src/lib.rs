@@ -244,9 +244,10 @@ impl Model {
         }
     }
     fn view_cb_rule(filter: &adblock::content_blocking::CbRule) -> Html {
+        let cb = serde_json::to_string(filter);
         html! {
             <>
-                <p>{ format!("{:?}", filter) }</p>
+                <p>{ format!("{}", cb.unwrap_or_else(|_| "failed to deserialize content blocking rule".to_string())) }</p>
             </>
         }
     }
