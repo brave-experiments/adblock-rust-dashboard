@@ -136,8 +136,8 @@ impl Component for Model {
                     { match &self.parse_result {
                         Ok(ParsedFilter::Network(filter)) => Self::view_network_filter(filter),
                         Ok(ParsedFilter::Cosmetic(filter)) => Self::view_cosmetic_filter(filter),
-                        Err(FilterParseError::Network(e)) => html! { <p>{format!("Error parsing network filter: {:?}", e)}</p> },
-                        Err(FilterParseError::Cosmetic(e)) => html! { <p>{format!("Error parsing cosmetic filter: {:?}", e)}</p> },
+                        Err(FilterParseError::Network(e)) => html! { <p>{"Error parsing network filter: "}<code class="error">{format!("{}", e)}</code></p> },
+                        Err(FilterParseError::Cosmetic(e)) => html! { <p>{"Error parsing cosmetic filter: "}<code class="error">{format!("{}", e)}</code></p> },
                         Err(FilterParseError::Unsupported) => html! { <p>{"Unsupported filter"}</p> },
                         Err(FilterParseError::Empty) => html! { <p></p> },
                     } }
@@ -154,7 +154,7 @@ impl Component for Model {
                                             {Self::view_cb_rule(rule2)}
                                         </>
                                     },
-                                    Err(e) => html! { <p>{format!("Couldn't convert to content blocking syntax: {:?}", e)}</p> },
+                                    Err(e) => html! { <p>{"Couldn't convert to content blocking syntax: "}<code class="error">{format!("{:?}", e)}</code></p> },
                                 } }
                             </>
                         }
@@ -177,13 +177,13 @@ impl Component for Model {
                         match self.network_result.as_ref() {
                             Some(Ok(blocker_result)) => html! {
                                 <>
-                                    <p>{format!("{:?}", blocker_result)}</p>
+                                    <p><code>{format!("{:?}", blocker_result)}</code></p>
                                     <p><i>{"Note: redirects will not show up, as none have been loaded"}</i></p>
                                 </>
                             },
                             Some(Err(request_error)) => html! {
                                 <>
-                                    <p>{format!("Error parsing request: {:?}", request_error)}</p>
+                                    <p>{"Error parsing request: "}<code class="error">{format!("{}", request_error)}</code></p>
                                 </>
                             },
                             None => html! { <p></p> },
@@ -196,7 +196,7 @@ impl Component for Model {
                         if let Some(cosmetic_result) = self.cosmetic_result.as_ref() {
                             html! {
                                 <>
-                                    <p>{format!("{:?}", cosmetic_result)}</p>
+                                    <p><code>{format!("{:?}", cosmetic_result)}</code></p>
                                     <p><i>{"Note: scriptlets will not show up, as none have been loaded"}</i></p>
                                 </>
                             }
@@ -217,7 +217,7 @@ impl Model {
         html! {
             <>
                 <h4>{"Network Filter"}</h4>
-                <p>{ format!("{:?}", filter) }</p>
+                <p><code>{ format!("{:?}", filter) }</code></p>
             </>
         }
     }
@@ -225,23 +225,27 @@ impl Model {
         html! {
             <>
                 <h4>{"Cosmetic Filter"}</h4>
-                <p>{ format!("{:?}", filter) }</p>
+                <p><code>{ format!("{:?}", filter) }</code></p>
             </>
         }
     }
     fn view_cb_rule(filter: &adblock::content_blocking::CbRule) -> Html {
-        let cb = serde_json::to_string(filter);
+        let cb = serde_json::to_string(filter).unwrap();
         html! {
             <>
-                <p>{ format!("{}", cb.unwrap_or_else(|_| "failed to deserialize content blocking rule".to_string())) }</p>
+                <p><code>{ format!("{}", cb) }</code></p>
             </>
         }
     }
     fn check_network_urls(&mut self) {
-        self.network_result = Some(
-            adblock::request::Request::new(&self.network_url, &self.network_source_url, &self.network_request_type)
-                .map(|request| self.engine.check_network_request(&request))
-        );
+        self.network_result = if self.network_url.is_empty() && self.network_source_url.is_empty() && self.network_request_type.is_empty() {
+            None
+        } else {
+            Some(
+                adblock::request::Request::new(&self.network_url, &self.network_source_url, &self.network_request_type)
+                    .map(|request| self.engine.check_network_request(&request))
+            )
+        }
     }
 }
 
