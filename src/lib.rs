@@ -20,6 +20,7 @@ struct Model {
     filter_list: String,
     filter_list_update_task: Option<Box<dyn Task>>,
     engine: adblock::Engine,
+    metadata: adblock::lists::FilterListMetadata,
 
     network_url: String,
     network_source_url: String,
@@ -57,6 +58,7 @@ impl Component for Model {
             filter_list: "".into(),
             filter_list_update_task: None,
             engine: adblock::Engine::new(false),
+            metadata: adblock::lists::FilterListMetadata::default(),
 
             network_url: String::new(),
             network_source_url: String::new(),
@@ -92,7 +94,7 @@ impl Component for Model {
             }
             Msg::FilterListTimeout => {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
-                filter_set.add_filter_list(&self.filter_list, ParseOptions::default());
+                self.metadata = filter_set.add_filter_list(&self.filter_list, ParseOptions::default());
                 self.engine = adblock::Engine::from_filter_set(filter_set, false);
                 self.check_network_urls();
             }
@@ -166,6 +168,7 @@ impl Component for Model {
                     <h2>{"Test a list"}</h2>
                     <h3>{"List contents"}</h3>
                     <textarea value=self.filter_list.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateFilterList(e.value))/>
+                    { Self::view_list_metadata(&self.metadata) }
                     <h3>{"Check a network request"}</h3>
                     <h4>{"Request URL"}</h4>
                     <input type="text" value=self.network_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkUrl(e.value))/>
@@ -245,6 +248,38 @@ impl Model {
                 adblock::request::Request::new(&self.network_url, &self.network_source_url, &self.network_request_type)
                     .map(|request| self.engine.check_network_request(&request))
             )
+        }
+    }
+
+    fn view_list_metadata(metadata: &adblock::lists::FilterListMetadata) -> Html {
+        fn view_link(name: &str, field: &Option<String>) -> Html {
+            html! {
+                if let Some(link) = field {
+                    html! { <div><span>{format!("{}: ", name)}<a href={format!("{}", link)}><code>{format!("{}", link)}</code></a></span></div> }
+                } else {
+                    html! { <></> }
+                }
+            }
+        }
+        html! {
+            <>
+                {
+                    if let Some(title) = &metadata.title {
+                        html! { <div><span>{"Title: "}<code>{format!("{}", title)}</code></span></div> }
+                    } else {
+                        html! { <></> }
+                    }
+                }
+                { view_link("Homepage", &metadata.homepage) }
+                {
+                    if let Some(expires) = &metadata.expires {
+                        html! { <div><span>{"Expires: "}<code>{format!("{:?}", expires)}</code></span></div> }
+                    } else {
+                        html! { <></> }
+                    }
+                }
+                { view_link("Redirect", &metadata.redirect) }
+            </>
         }
     }
 }
