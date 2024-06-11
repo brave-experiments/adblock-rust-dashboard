@@ -1,5 +1,6 @@
 #![recursion_limit="1024"]
 
+use adblock::resources::PermissionMask;
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 use yew::services::{Task, TimeoutService};
@@ -18,17 +19,15 @@ struct Model {
 
     filter_list: String,
     filter_list_update_task: Option<Box<dyn Task>>,
-    engine: adblock::engine::Engine,
+    engine: adblock::Engine,
 
     network_url: String,
     network_source_url: String,
     network_request_type: String,
-    network_result: Option<adblock::blocker::BlockerResult>,
+    network_result: Option<Result<adblock::blocker::BlockerResult, adblock::request::RequestError>>,
 
     cosmetic_url: String,
     cosmetic_result: Option<adblock::cosmetic_filter_cache::UrlSpecificResources>,
-
-    download_legacy_format: bool,
 }
 
 enum Msg {
@@ -39,7 +38,6 @@ enum Msg {
     UpdateNetworkSourceUrl(String),
     UpdateNetworkRequestType(String),
     UpdateCosmeticUrl(String),
-    ToggleDownloadFormat,
     DownloadDat,
 }
 
@@ -58,7 +56,7 @@ impl Component for Model {
 
             filter_list: "".into(),
             filter_list_update_task: None,
-            engine: adblock::engine::Engine::new(false),
+            engine: adblock::Engine::new(false),
 
             network_url: String::new(),
             network_source_url: String::new(),
@@ -67,8 +65,6 @@ impl Component for Model {
 
             cosmetic_url: String::new(),
             cosmetic_result: None,
-
-            download_legacy_format: false,
         }
     }
 
@@ -76,8 +72,8 @@ impl Component for Model {
         match msg {
             Msg::UpdateFilter(new_value) => {
                 self.filter = new_value;
-                self.parse_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard });
-                self.cb_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard }).ok().map(|r| r.try_into());
+                self.parse_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard, permissions: PermissionMask::from_bits(0) });
+                self.cb_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard, permissions: PermissionMask::from_bits(0) }).ok().map(|r| r.try_into());
             }
             Msg::UpdateFilterList(new_value) => {
                 self.filter_list = new_value;
@@ -97,7 +93,7 @@ impl Component for Model {
             Msg::FilterListTimeout => {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
                 filter_set.add_filter_list(&self.filter_list, ParseOptions::default());
-                self.engine = adblock::engine::Engine::from_filter_set(filter_set, false);
+                self.engine = adblock::Engine::from_filter_set(filter_set, false);
                 self.check_network_urls();
             }
             Msg::UpdateNetworkUrl(new_value) => {
@@ -116,15 +112,8 @@ impl Component for Model {
                 self.cosmetic_url = new_value;
                 self.cosmetic_result = Some(self.engine.url_cosmetic_resources(&self.cosmetic_url));
             }
-            Msg::ToggleDownloadFormat => {
-                self.download_legacy_format = !self.download_legacy_format;
-            }
             Msg::DownloadDat => {
-                let data = if self.download_legacy_format {
-                    self.engine.serialize_compressed().unwrap()
-                } else {
-                    self.engine.serialize_raw().unwrap()
-                };
+                let data = self.engine.serialize_raw().unwrap();
                 util::save_bin_file("rs-ABPFilterParserData.dat", &data[..]);
             }
         }
@@ -185,19 +174,19 @@ impl Component for Model {
                     <h4>{"Request type"}</h4>
                     <input type="text" value=self.network_request_type.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkRequestType(e.value))/>
                     {
-                        if let Some(blocker_result) = self.network_result.as_ref() {
-                            if let Some(error) = blocker_result.error.as_ref() {
-                                html! { <p>{format!("Error: {}", error)}</p> }
-                            } else {
-                                html! {
-                                    <>
-                                        <p>{format!("{:?}", blocker_result)}</p>
-                                        <p><i>{"Note: redirects will not show up, as none have been loaded"}</i></p>
-                                    </>
-                                }
-                            }
-                        } else {
-                            html! { <p></p> }
+                        match self.network_result.as_ref() {
+                            Some(Ok(blocker_result)) => html! {
+                                <>
+                                    <p>{format!("{:?}", blocker_result)}</p>
+                                    <p><i>{"Note: redirects will not show up, as none have been loaded"}</i></p>
+                                </>
+                            },
+                            Some(Err(request_error)) => html! {
+                                <>
+                                    <p>{format!("Error parsing request: {:?}", request_error)}</p>
+                                </>
+                            },
+                            None => html! { <p></p> },
                         }
                     }
                     <h3>{"Check cosmetic resources"}</h3>
@@ -216,9 +205,6 @@ impl Component for Model {
                         }
                     }
                     <h3>{"Download the serialized DAT"}</h3>
-                    <input id="download_legacy_format" type="checkbox" checked=self.download_legacy_format onchange=self.link.callback(|_e: ChangeData| Msg::ToggleDownloadFormat)/>
-                    <label for="download_legacy_format">{"Download legacy (compressed) format"}</label>
-                    <br/>
                     <button onclick=self.link.callback(|_e: MouseEvent| Msg::DownloadDat)>{"Download"}</button>
                 </div>
             </>
@@ -252,7 +238,10 @@ impl Model {
         }
     }
     fn check_network_urls(&mut self) {
-        self.network_result = Some(self.engine.check_network_urls(&self.network_url, &self.network_source_url, &self.network_request_type));
+        self.network_result = Some(
+            adblock::request::Request::new(&self.network_url, &self.network_source_url, &self.network_request_type)
+                .map(|request| self.engine.check_network_request(&request))
+        );
     }
 }
 
