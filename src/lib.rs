@@ -3,7 +3,6 @@
 use adblock::resources::PermissionMask;
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
-use yew::services::{Task, TimeoutService};
 
 use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions, RuleTypes};
 use adblock::content_blocking::{CbRuleEquivalent, CbRuleCreationFailure};
@@ -11,14 +10,12 @@ use adblock::content_blocking::{CbRuleEquivalent, CbRuleCreationFailure};
 mod util;
 
 struct Model {
-    link: ComponentLink<Self>,
-
     filter: String,
     parse_result: Result<ParsedFilter, FilterParseError>,
     cb_result: Option<Result<CbRuleEquivalent, CbRuleCreationFailure>>,
 
     filter_list: String,
-    filter_list_update_task: Option<Box<dyn Task>>,
+    filter_list_update_task: Option<gloo_timers::callback::Timeout>,
     engine: adblock::Engine,
     metadata: adblock::lists::FilterListMetadata,
 
@@ -42,15 +39,13 @@ enum Msg {
     DownloadDat,
 }
 
-const FILTER_LIST_UPDATE_DEBOUNCE_MS: u64 = 1200;
+const FILTER_LIST_UPDATE_DEBOUNCE_MS: u32 = 1200;
 
 impl Component for Model {
     type Message = Msg;
     type Properties = ();
-    fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
+    fn create(_ctx: &Context<Self>) -> Self {
         Self {
-            link,
-
             filter: "".into(),
             parse_result: Err(FilterParseError::Empty),
             cb_result: None,
@@ -70,7 +65,7 @@ impl Component for Model {
         }
     }
 
-    fn update(&mut self, msg: Self::Message) -> ShouldRender {
+    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             Msg::UpdateFilter(new_value) => {
                 self.filter = new_value;
@@ -86,11 +81,13 @@ impl Component for Model {
                 // Remove any existing block result
                 self.network_result.take();
 
+                let link = ctx.link().clone();
+
                 // Start a new 3 second timeout
-                self.filter_list_update_task = Some(Box::new(TimeoutService::spawn(
-                    std::time::Duration::from_millis(FILTER_LIST_UPDATE_DEBOUNCE_MS),
-                    self.link.callback(|_| Msg::FilterListTimeout),
-                )));
+                self.filter_list_update_task = Some(gloo_timers::callback::Timeout::new(
+                    FILTER_LIST_UPDATE_DEBOUNCE_MS,
+                    move || { link.send_message(Msg::FilterListTimeout); }
+                ));
             }
             Msg::FilterListTimeout => {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
@@ -122,18 +119,18 @@ impl Component for Model {
         true
     }
 
-    fn change(&mut self, _props: Self::Properties) -> ShouldRender {
+    fn changed(&mut self, _ctx: &Context<Self>) -> bool {
         false
     }
 
-    fn view(&self) -> Html {
+    fn view(&self, ctx: &Context<Self>) -> Html {
         html! {
             <>
                 <h1><code>{"adblock-rust"}</code>{" Dashboard"}</h1>
                 <a href="https://github.com/brave-experiments/adblock-rust-dashboard"><p>{"View source on GitHub"}</p></a>
                 <div>
                     <h2>{"Parse a single filter"}</h2>
-                    <input type="text" value=self.filter.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateFilter(e.value))/>
+                    <input type="text" value={self.filter.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateFilter(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
 
                     { match &self.parse_result {
                         Ok(ParsedFilter::Network(filter)) => Self::view_network_filter(filter),
@@ -167,15 +164,15 @@ impl Component for Model {
                 <div>
                     <h2>{"Test a list"}</h2>
                     <h3>{"List contents"}</h3>
-                    <textarea value=self.filter_list.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateFilterList(e.value))/>
+                    <textarea value={self.filter_list.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateFilterList(e.target().unwrap().dyn_into::<web_sys::HtmlTextAreaElement>().unwrap().value()))}/>
                     { Self::view_list_metadata(&self.metadata) }
                     <h3>{"Check a network request"}</h3>
                     <h4>{"Request URL"}</h4>
-                    <input type="text" value=self.network_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkUrl(e.value))/>
+                    <input type="text" value={self.network_url.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateNetworkUrl(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     <h4>{"Source URL"}</h4>
-                    <input type="text" value=self.network_source_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkSourceUrl(e.value))/>
+                    <input type="text" value={self.network_source_url.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateNetworkSourceUrl(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     <h4>{"Request type"}</h4>
-                    <input type="text" value=self.network_request_type.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateNetworkRequestType(e.value))/>
+                    <input type="text" value={self.network_request_type.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateNetworkRequestType(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     {
                         match self.network_result.as_ref() {
                             Some(Ok(blocker_result)) => html! {
@@ -194,7 +191,7 @@ impl Component for Model {
                     }
                     <h3>{"Check cosmetic resources"}</h3>
                     <h4>{"Source URL"}</h4>
-                    <input type="text" value=self.cosmetic_url.clone() oninput=self.link.callback(|e: InputData| Msg::UpdateCosmeticUrl(e.value))/>
+                    <input type="text" value={self.cosmetic_url.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateCosmeticUrl(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     {
                         if let Some(cosmetic_result) = self.cosmetic_result.as_ref() {
                             html! {
@@ -208,7 +205,7 @@ impl Component for Model {
                         }
                     }
                     <h3>{"Download the serialized DAT"}</h3>
-                    <button onclick=self.link.callback(|_e: MouseEvent| Msg::DownloadDat)>{"Download"}</button>
+                    <button onclick={ctx.link().callback(|_e: MouseEvent| Msg::DownloadDat)}>{"Download"}</button>
                 </div>
             </>
         }
@@ -253,12 +250,10 @@ impl Model {
 
     fn view_list_metadata(metadata: &adblock::lists::FilterListMetadata) -> Html {
         fn view_link(name: &str, field: &Option<String>) -> Html {
-            html! {
-                if let Some(link) = field {
-                    html! { <div><span>{format!("{}: ", name)}<a href={format!("{}", link)}><code>{format!("{}", link)}</code></a></span></div> }
-                } else {
-                    html! { <></> }
-                }
+            if let Some(link) = field {
+                html! { <div><span>{format!("{}: ", name)}<a href={format!("{}", link)}><code>{format!("{}", link)}</code></a></span></div> }
+            } else {
+                html! { <></> }
             }
         }
         html! {
@@ -287,5 +282,5 @@ impl Model {
 #[wasm_bindgen(start)]
 pub fn run_app() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    App::<Model>::new().mount_to_body();
+    yew::start_app::<Model>();
 }
