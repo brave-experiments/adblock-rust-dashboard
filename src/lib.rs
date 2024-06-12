@@ -119,7 +119,7 @@ impl Component for Model {
         true
     }
 
-    fn changed(&mut self, _ctx: &Context<Self>) -> bool {
+    fn changed(&mut self, _ctx: &Context<Self>, _old_props: &Self::Properties) -> bool {
         false
     }
 
@@ -282,5 +282,5 @@ impl Model {
 #[wasm_bindgen(start)]
 pub fn run_app() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-    yew::start_app::<Model>();
+    yew::Renderer::<Model>::new().render();
 }
