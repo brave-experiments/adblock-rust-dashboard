@@ -26,6 +26,8 @@ struct Model {
 
     cosmetic_url: String,
     cosmetic_result: Option<adblock::cosmetic_filter_cache::UrlSpecificResources>,
+
+    resources: Vec<adblock::resources::Resource>,
 }
 
 enum Msg {
@@ -36,6 +38,7 @@ enum Msg {
     UpdateNetworkSourceUrl(String),
     UpdateNetworkRequestType(String),
     UpdateCosmeticUrl(String),
+    LoadResourcesJson(String),
     DownloadDat,
 }
 
@@ -62,6 +65,8 @@ impl Component for Model {
 
             cosmetic_url: String::new(),
             cosmetic_result: None,
+
+            resources: vec![],
         }
     }
 
@@ -93,6 +98,7 @@ impl Component for Model {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
                 self.metadata = filter_set.add_filter_list(&self.filter_list, ParseOptions::default());
                 self.engine = adblock::Engine::from_filter_set(filter_set, false);
+                self.engine.use_resources(self.resources.iter().map(|r| r.clone()));
                 self.check_network_urls();
             }
             Msg::UpdateNetworkUrl(new_value) => {
@@ -110,6 +116,11 @@ impl Component for Model {
             Msg::UpdateCosmeticUrl(new_value) => {
                 self.cosmetic_url = new_value;
                 self.cosmetic_result = Some(self.engine.url_cosmetic_resources(&self.cosmetic_url));
+            }
+            Msg::LoadResourcesJson(new_value) => {
+                let resources: Vec<_> = serde_json::from_str(&new_value).unwrap();
+                self.resources = resources;
+                self.engine.use_resources(self.resources.iter().map(|r| r.clone()));
             }
             Msg::DownloadDat => {
                 let data = self.engine.serialize_raw().unwrap();
@@ -165,6 +176,32 @@ impl Component for Model {
                     <h2>{"Test a list"}</h2>
                     <h3>{"List contents"}</h3>
                     <textarea value={self.filter_list.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateFilterList(e.target().unwrap().dyn_into::<web_sys::HtmlTextAreaElement>().unwrap().value()))}/>
+                    <input type="file" accept=".json,application/json" id="load_resources_json" oninput={
+                        let link = ctx.link().clone();
+                        move |e: InputEvent| {
+                            let link = link.clone();
+                            let input_element = e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap();
+                            if let Some(file) = input_element.files().unwrap().item(0) {
+                                unsafe {
+                                    read_file_text_and_then(&file, move |text| {
+                                        let link = link.clone();
+                                        link.send_message(Msg::LoadResourcesJson(text));
+                                    });
+                                }
+                            }
+                            input_element.set_value("");
+                        }
+                    }/>
+                    <div>
+                        <label for="load_resources_json"><span>{"Load "}</span><code>{"resources.json"}</code></label>
+                        <i>{
+                            if self.resources.len() > 0 {
+                                format!(" {} resources loaded", self.resources.len())
+                            } else {
+                                " No resources loaded".to_string()
+                            }
+                        }</i>
+                    </div>
                     { Self::view_list_metadata(&self.metadata) }
                     <h3>{"Check a network request"}</h3>
                     <h4>{"Request URL"}</h4>
@@ -194,10 +231,17 @@ impl Component for Model {
                     <input type="text" value={self.cosmetic_url.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateCosmeticUrl(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     {
                         if let Some(cosmetic_result) = self.cosmetic_result.as_ref() {
+                            let resources_disclaimer = if self.resources.is_empty() {
+                                html! {
+                                    <p><i>{"Note: scriptlets will not show up, as none have been loaded"}</i></p>
+                                }
+                            } else {
+                                html! {}
+                            };
                             html! {
                                 <>
                                     <p><code>{format!("{:?}", cosmetic_result)}</code></p>
-                                    <p><i>{"Note: scriptlets will not show up, as none have been loaded"}</i></p>
+                                    {resources_disclaimer}
                                 </>
                             }
                         } else {
@@ -276,6 +320,37 @@ impl Model {
                 { view_link("Redirect", &metadata.redirect) }
             </>
         }
+    }
+}
+
+/// Some massive hacks to make `FileReader` accessible to WASM.
+///
+/// Don't use this with multiple file inputs.
+unsafe fn read_file_text_and_then(file: &web_sys::File, closure: impl FnOnce(String) + 'static) {
+    static mut FILEREADER: Option<web_sys::FileReader> = None;
+    static mut FILEREADER_CLOSURE: Option<wasm_bindgen::closure::Closure<(dyn FnMut(yew::ProgressEvent) + 'static)>> = None;
+
+    fn onload_helper(e: ProgressEvent, closure: impl FnOnce(String)) {
+        let text = e.target().unwrap().dyn_into::<web_sys::FileReader>().unwrap().result().unwrap().as_string().unwrap();
+        closure(text);
+        unsafe {
+            FILEREADER = None;
+            FILEREADER_CLOSURE = None;
+        }
+    }
+
+    let filereader = web_sys::FileReader::new().unwrap();
+    let closure = unsafe {
+        FILEREADER_CLOSURE = Some(wasm_bindgen::closure::Closure::once(move |e: ProgressEvent| {
+            onload_helper(e, closure);
+        }));
+        (*(FILEREADER_CLOSURE.as_ref()).unwrap()).as_ref().unchecked_ref()
+    };
+    filereader.set_onload(Some(closure));
+
+    unsafe {
+        FILEREADER = Some(filereader);
+        FILEREADER.as_ref().unwrap().read_as_text(file).unwrap();
     }
 }
 
