@@ -323,35 +323,20 @@ impl Model {
     }
 }
 
-/// Some massive hacks to make `FileReader` accessible to WASM.
-///
-/// Don't use this with multiple file inputs.
+/// Reads a file and then executes a closure on the text contents using `FileReader`.
 unsafe fn read_file_text_and_then(file: &web_sys::File, closure: impl FnOnce(String) + 'static) {
-    static mut FILEREADER: Option<web_sys::FileReader> = None;
-    static mut FILEREADER_CLOSURE: Option<wasm_bindgen::closure::Closure<(dyn FnMut(yew::ProgressEvent) + 'static)>> = None;
-
     fn onload_helper(e: ProgressEvent, closure: impl FnOnce(String)) {
         let text = e.target().unwrap().dyn_into::<web_sys::FileReader>().unwrap().result().unwrap().as_string().unwrap();
         closure(text);
-        unsafe {
-            FILEREADER = None;
-            FILEREADER_CLOSURE = None;
-        }
     }
 
     let filereader = web_sys::FileReader::new().unwrap();
-    let closure = unsafe {
-        FILEREADER_CLOSURE = Some(wasm_bindgen::closure::Closure::once(move |e: ProgressEvent| {
-            onload_helper(e, closure);
-        }));
-        (*(FILEREADER_CLOSURE.as_ref()).unwrap()).as_ref().unchecked_ref()
-    };
-    filereader.set_onload(Some(closure));
+    let closure = wasm_bindgen::closure::Closure::once(move |e: ProgressEvent| {
+        onload_helper(e, closure);
+    }).into_js_value().dyn_into::<web_sys::js_sys::Function>().unwrap();
+    filereader.set_onload(Some(&closure));
 
-    unsafe {
-        FILEREADER = Some(filereader);
-        FILEREADER.as_ref().unwrap().read_as_text(file).unwrap();
-    }
+    filereader.read_as_text(file).unwrap();
 }
 
 #[wasm_bindgen(start)]
