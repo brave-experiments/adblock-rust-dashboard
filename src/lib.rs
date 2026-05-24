@@ -123,7 +123,7 @@ impl Component for Model {
                 self.engine.use_resources(self.resources.iter().map(|r| r.clone()));
             }
             Msg::DownloadDat => {
-                let data = self.engine.serialize_raw().unwrap();
+                let data = self.engine.serialize().unwrap();
                 util::save_bin_file("rs-ABPFilterParserData.dat", &data[..]);
             }
         }
