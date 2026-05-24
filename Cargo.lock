@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "adblock"
-version = "0.10.4"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49abdd5099e8f4ab49ea4a26cbcebc8a5562aea6606d88e03194fa9ecd8450f8"
+checksum = "5d6a431e8b3c95fa49574ed925b85fe34978f5917168c8ce4dcf729af861fc87"
 dependencies = [
  "addr",
  "base64 0.22.1",
@@ -21,6 +21,7 @@ dependencies = [
  "precomputed-hash",
  "regex",
  "rmp-serde",
+ "rustc-hash",
  "seahash",
  "selectors",
  "serde",
@@ -1297,6 +1298,12 @@ name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustc_version"

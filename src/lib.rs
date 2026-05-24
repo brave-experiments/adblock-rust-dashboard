@@ -55,7 +55,7 @@ impl Component for Model {
 
             filter_list: "".into(),
             filter_list_update_task: None,
-            engine: adblock::Engine::new(false),
+            engine: adblock::Engine::default(),
             metadata: adblock::lists::FilterListMetadata::default(),
 
             network_url: String::new(),
@@ -123,7 +123,7 @@ impl Component for Model {
                 self.engine.use_resources(self.resources.iter().map(|r| r.clone()));
             }
             Msg::DownloadDat => {
-                let data = self.engine.serialize().unwrap();
+                let data = self.engine.serialize();
                 util::save_bin_file("rs-ABPFilterParserData.dat", &data[..]);
             }
         }
