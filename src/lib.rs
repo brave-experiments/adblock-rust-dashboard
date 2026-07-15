@@ -4,14 +4,15 @@ use adblock::resources::PermissionMask;
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
-use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedFilter, ParseOptions, RuleTypes};
+use adblock::lists::{parse_filter, FilterFormat, FilterParseError, ParsedLine, ParseOptions, RuleTypes};
 use adblock::content_blocking::{CbRuleEquivalent, CbRuleCreationFailure};
 
+mod owned_parsed_line;
 mod util;
 
 struct Model {
     filter: String,
-    parse_result: Result<ParsedFilter, FilterParseError>,
+    parse_result: owned_parsed_line::OwnedParsedLine,
     cb_result: Option<Result<CbRuleEquivalent, CbRuleCreationFailure>>,
 
     filter_list: String,
@@ -23,6 +24,7 @@ struct Model {
     network_source_url: String,
     network_request_type: String,
     network_result: Option<Result<adblock::blocker::BlockerResult, adblock::request::RequestError>>,
+    network_method: String,
 
     cosmetic_url: String,
     cosmetic_result: Option<adblock::cosmetic_filter_cache::UrlSpecificResources>,
@@ -37,6 +39,7 @@ enum Msg {
     UpdateNetworkUrl(String),
     UpdateNetworkSourceUrl(String),
     UpdateNetworkRequestType(String),
+    UpdateNetworkMethod(String),
     UpdateCosmeticUrl(String),
     LoadResourcesJson(String),
     DownloadDat,
@@ -50,7 +53,7 @@ impl Component for Model {
     fn create(_ctx: &Context<Self>) -> Self {
         Self {
             filter: "".into(),
-            parse_result: Err(FilterParseError::Empty),
+            parse_result: Default::default(),
             cb_result: None,
 
             filter_list: "".into(),
@@ -61,6 +64,7 @@ impl Component for Model {
             network_url: String::new(),
             network_source_url: String::new(),
             network_request_type: String::new(),
+            network_method: String::new(),
             network_result: None,
 
             cosmetic_url: String::new(),
@@ -74,7 +78,7 @@ impl Component for Model {
         match msg {
             Msg::UpdateFilter(new_value) => {
                 self.filter = new_value;
-                self.parse_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard, permissions: PermissionMask::from_bits(0) });
+                self.parse_result.update_line(&self.filter, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard, permissions: PermissionMask::from_bits(0) });
                 self.cb_result = parse_filter(&self.filter, true, ParseOptions { rule_types: RuleTypes::All, format: FilterFormat::Standard, permissions: PermissionMask::from_bits(0) }).ok().map(|r| r.try_into());
             }
             Msg::UpdateFilterList(new_value) => {
@@ -96,8 +100,8 @@ impl Component for Model {
             }
             Msg::FilterListTimeout => {
                 let mut filter_set = adblock::lists::FilterSet::new(true);
-                self.metadata = filter_set.add_filter_list(&self.filter_list, ParseOptions::default());
-                self.engine = adblock::Engine::from_filter_set(filter_set, false);
+                self.metadata = filter_set.add_filter_list(self.filter_list.clone(), ParseOptions::default()).metadata;
+                self.engine = adblock::Engine::new_with_filter_set(filter_set);
                 self.engine.use_resources(self.resources.iter().map(|r| r.clone()));
                 self.check_network_urls();
             }
@@ -111,6 +115,10 @@ impl Component for Model {
             }
             Msg::UpdateNetworkRequestType(new_value) => {
                 self.network_request_type = new_value;
+                self.check_network_urls();
+            }
+            Msg::UpdateNetworkMethod(new_value) => {
+                self.network_method = new_value;
                 self.check_network_urls();
             }
             Msg::UpdateCosmeticUrl(new_value) => {
@@ -143,12 +151,13 @@ impl Component for Model {
                     <h2>{"Parse a single filter"}</h2>
                     <input type="text" value={self.filter.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateFilter(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
 
-                    { match &self.parse_result {
-                        Ok(ParsedFilter::Network(filter)) => Self::view_network_filter(filter),
-                        Ok(ParsedFilter::Cosmetic(filter)) => Self::view_cosmetic_filter(filter),
+                    { match &self.parse_result.get() {
+                        Ok(ParsedLine::Network(filter)) => Self::view_network_filter(filter),
+                        Ok(ParsedLine::Cosmetic(filter)) => Self::view_cosmetic_filter(filter),
                         Err(FilterParseError::Network(e)) => html! { <p>{"Error parsing network filter: "}<code class="error">{format!("{}", e)}</code></p> },
                         Err(FilterParseError::Cosmetic(e)) => html! { <p>{"Error parsing cosmetic filter: "}<code class="error">{format!("{}", e)}</code></p> },
                         Err(FilterParseError::Unsupported) => html! { <p>{"Unsupported filter"}</p> },
+                        Err(FilterParseError::InvalidExpiresInterval) => html! { <p>{"Invalid expires interval"}</p> },
                         Err(FilterParseError::Empty) => html! { <p></p> },
                     } }
 
@@ -210,6 +219,8 @@ impl Component for Model {
                     <input type="text" value={self.network_source_url.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateNetworkSourceUrl(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     <h4>{"Request type"}</h4>
                     <input type="text" value={self.network_request_type.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateNetworkRequestType(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
+                    <h4>{"Request method"}</h4>
+                    <input type="text" value={self.network_method.clone()} oninput={ctx.link().callback(|e: InputEvent| Msg::UpdateNetworkMethod(e.target().unwrap().dyn_into::<web_sys::HtmlInputElement>().unwrap().value()))}/>
                     {
                         match self.network_result.as_ref() {
                             Some(Ok(blocker_result)) => html! {
@@ -282,11 +293,11 @@ impl Model {
         }
     }
     fn check_network_urls(&mut self) {
-        self.network_result = if self.network_url.is_empty() && self.network_source_url.is_empty() && self.network_request_type.is_empty() {
+        self.network_result = if self.network_url.is_empty() && self.network_source_url.is_empty() && self.network_request_type.is_empty() && self.network_method.is_empty() {
             None
         } else {
             Some(
-                adblock::request::Request::new(&self.network_url, &self.network_source_url, &self.network_request_type)
+                adblock::request::Request::new(&self.network_url, &self.network_source_url, &self.network_request_type, &self.network_method)
                     .map(|request| self.engine.check_network_request(&request))
             )
         }
