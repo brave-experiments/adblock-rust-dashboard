@@ -10,7 +10,7 @@ checksum = "cdee398968a587be0a2edbbb9f5719e79be035d4443a40e00d8423df6d68319b"
 dependencies = [
  "addr",
  "arrayvec",
- "base64",
+ "base64 0.22.1",
  "bitflags",
  "cssparser",
  "flatbuffers",
@@ -34,7 +34,7 @@ name = "adblock-rust-dashboard"
 version = "0.1.0"
 dependencies = [
  "adblock",
- "base64",
+ "base64 0.23.1",
  "console_error_panic_hook",
  "gloo-timers 0.4.0",
  "serde_json",
@@ -79,6 +79,12 @@ name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
+
+[[package]]
+name = "base64"
+version = "0.23.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bincode"
